@@ -1,0 +1,8 @@
+Flask==2.2.5
+Flask-SocketIO==5.3.3
+Flask-Session==0.4.0
+eventlet==0.33.0
+redis==4.5.4
+python-dotenv==1.0.0
+google-generativeai==0.7.0
+
