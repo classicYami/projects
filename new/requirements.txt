@@ -1,7 +1,3 @@
-Flask
-python-dotenv
-google-genai
-Pillow
 Flask==2.2.5
 Flask-SocketIO==5.3.3
 Flask-Session==0.4.0
