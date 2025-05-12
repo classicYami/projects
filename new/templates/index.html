@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Diagnostic AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Socket.IO client library -->
+  <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
+  
+  <style>
+    /* CSS Variables for theming */
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #333333;
+      --header-bg: #f3f3f3;
+      --sidebar-bg: #ededed;
+      --message-bg: #f4f4f4;
+      --assistant-msg-bg: #e7f3ff;
+      --user-msg-bg: #007acc;
+      --user-msg-text: #ffffff;
+      --button-bg: #007acc;
+      --button-text: #ffffff;
+      --border-color: #dddddd;
+      --sidebar-width: 260px;
+    }
+    .dark-mode {
+      --bg-color: #1e1e1e;
+      --text-color: #c8c8c8;
+      --header-bg: #252526;
+      --sidebar-bg: #2d2d30;
+      --message-bg: #3a3a3d;
+      --assistant-msg-bg: #44464a;
+      --user-msg-bg: #0a84ff;
+      --user-msg-text: #ffffff;
+      --button-bg: #0a84ff;
+      --button-text: #ffffff;
+      --border-color: #444444;
+    }
+    
+    /* Global Styles */
+    body, button, input {
+      font-family: "Segoe UI", sans-serif;
+      transition: all 0.3s ease;
+    }
+    body {
+      margin: 0;
+      background: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    /* Sidebar (Conversation Panel) */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border-color);
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      transition: transform 0.3s ease;
+    }
+    .sidebar.hidden {
+      transform: translateX(-100%);
+    }
+    .sidebar header {
+      padding: 20px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      text-align: center;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--border-color);
+    }
+    .conversation-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      flex: 1;
+    }
+    .conversation-list li {
+      padding: 12px 20px;
+      margin: 8px 10px;  /* Provides vertical space between tabs */
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-color);
+      cursor: pointer;
+      text-align: center;
+      display: block;
+    }
+    .conversation-list li:hover, .conversation-list li.active {
+      background: var(--message-bg);
+      font-weight: 500;
+    }
+    .conversation-controls {
+      padding: 12px;
+      text-align: center;
+      border-top: 1px solid var(--border-color);
+      background: var(--header-bg);
+    }
+    .conversation-controls button {
+      padding: 6px 12px;
+      background: var(--button-bg);
+      color: var(--button-text);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 4px;
+    }
+    
+    /* Chat Area */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-color);
+    }
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--header-bg);
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .chat-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      flex: 1;
+      text-align: center;
+    }
+    .header-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .header-buttons button {
+      padding: 6px 12px;
+      background: var(--button-bg);
+      color: var(--button-text);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    /* Chat Messages */
+    .chat-messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-message {
+      display: inline-block;
+      padding: 12px 16px;
+      margin: 8px 0;  /* Vertical spacing between messages */
+      border-radius: 8px;
+      background: var(--message-bg);
+      word-wrap: break-word;
+      line-height: 1.4;
+      max-width: 80%;
+      width: -moz-fit-content;
+      width: -webkit-fit-content;
+      width: fit-content;
+    }
+    .chat-message.assistant {
+      background: var(--assistant-msg-bg);
+      align-self: flex-start;
+    }
+    .chat-message.user {
+      background: var(--user-msg-bg);
+      color: var(--user-msg-text);
+      align-self: flex-end;
+    }
+    .chat-message.typing {
+      font-style: italic;
+      opacity: 0.7;
+    }
+    
+    /* Chat Input */
+    .chat-input {
+      display: flex;
+      padding: 16px 20px;
+      background: var(--header-bg);
+      border-top: 1px solid var(--border-color);
+      align-items: center;
+    }
+    .chat-input input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      font-size: 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      outline: none;
+      margin-right: 10px;
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
+    .chat-input button {
+      padding: 10px 16px;
+      background: var(--button-bg);
+      color: var(--button-text);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar (Conversation Panel) -->
+  <div class="sidebar" id="sidebar">
+    <header>Conversation History</header>
+    <ul class="conversation-list" id="conversationList">
+      <!-- Dynamic conversation tabs -->
+    </ul>
+    <div class="conversation-controls">
+      <button id="addConversation">+ New Conversation</button>
+      <button id="resetConversation">Reset Conversation</button>
+    </div>
+  </div>
+  
+  <!-- Main Chat Area -->
+  <div class="chat-area" id="chatArea">
+    <div class="chat-header">
+      <button id="toggleSidebar">☰</button>
+      <h2 id="conversationTitle">Dr Expert</h2>
+      <div class="header-buttons">
+        <button id="toggleMode">🌙</button>
+      </div>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <!-- Dynamic messages will be inserted here -->
+    </div>
+    <div class="chat-input">
+      <input type="text" id="messageInput" placeholder="Type your message here...">
+      <button id="voiceInput" title="Voice Input">🎤</button>
+      <button id="sendMessage">Send</button>
+    </div>
+  </div>
+  
+  <script>
+    // Establish the Socket.IO connection
+    const socket = io();
+
+    // Get references to UI elements
+    const sidebarEl = document.getElementById('sidebar');
+    const conversationListEl = document.getElementById('conversationList');
+    const addConversationBtn = document.getElementById('addConversation');
+    const resetConversationBtn = document.getElementById('resetConversation');
+    const conversationTitleEl = document.getElementById('conversationTitle');
+    const chatMessagesEl = document.getElementById('chatMessages');
+    const messageInputEl = document.getElementById('messageInput');
+    const sendMessageBtn = document.getElementById('sendMessage');
+    const voiceInputBtn = document.getElementById('voiceInput');
+    const toggleModeBtn = document.getElementById('toggleMode');
+    const toggleSidebarBtn = document.getElementById('toggleSidebar');
+
+    // Store conversations in localStorage
+    let conversations = {};
+    let activeConversationId = null;
+    let conversationIndex = 1;
+
+    // Load existing conversations if available
+    if (localStorage.getItem('conversations')) {
+      conversations = JSON.parse(localStorage.getItem('conversations'));
+      activeConversationId = localStorage.getItem('activeConversationId');
+    }
+
+    // Function to render the conversation list
+    function renderConversations() {
+      conversationListEl.innerHTML = '';
+      for (const id in conversations) {
+        const li = document.createElement('li');
+        li.textContent = conversations[id].name;
+        li.dataset.id = id;
+        if (id === activeConversationId) li.classList.add('active');
+        li.addEventListener('click', () => {
+          activeConversationId = li.dataset.id;
+          conversationTitleEl.textContent = conversations[activeConversationId].name;
+          renderMessages();
+          saveConversations();
+          renderConversations();
+        });
+        conversationListEl.appendChild(li);
+      }
+    }
+
+    // Function to render messages in the chat
+    function renderMessages() {
+      chatMessagesEl.innerHTML = '';
+      if (activeConversationId && conversations[activeConversationId]) {
+        conversations[activeConversationId].messages.forEach(msg => {
+          const msgDiv = document.createElement('div');
+          msgDiv.classList.add('chat-message', msg.role); // 'user' or 'assistant'
+          msgDiv.textContent = msg.text;
+          chatMessagesEl.appendChild(msgDiv);
+        });
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      }
+    }
+
+    // Save conversations to localStorage
+    function saveConversations() {
+      localStorage.setItem('conversations', JSON.stringify(conversations));
+      localStorage.setItem('activeConversationId', activeConversationId);
+    }
+
+    // Add a new conversation
+    function addConversation() {
+      const id = 'conv-' + Date.now();
+      const name = 'Conversation ' + conversationIndex;
+      conversationIndex++;
+      conversations[id] = { name: name, messages: [] };
+      activeConversationId = id;
+      conversationTitleEl.textContent = name;
+      renderConversations();
+      renderMessages();
+      saveConversations();
+    }
+
+    // Reset conversation by clearing localStorage and reloading the page
+    resetConversationBtn.addEventListener('click', () => {
+      localStorage.removeItem('conversations');
+      localStorage.removeItem('activeConversationId');
+      location.reload();
+    });
+
+    // Initialize conversation list if empty
+    if (Object.keys(conversations).length === 0) {
+      addConversation();
+    } else {
+      renderConversations();
+      renderMessages();
+    }
+
+    // Toggle dark/light mode and persist the setting
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+      toggleModeBtn.textContent = document.body.classList.contains('dark-mode') ? "☀️" : "🌙";
+    }
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.body.classList.add('dark-mode');
+      toggleModeBtn.textContent = "☀️";
+    }
+    toggleModeBtn.addEventListener('click', toggleDarkMode);
+
+    // Toggle conversation panel visibility
+    toggleSidebarBtn.addEventListener('click', () => {
+      sidebarEl.classList.toggle('hidden');
+    });
+
+    // Function to send a message
+    function sendMessage() {
+      const messageText = messageInputEl.value.trim();
+      if (!messageText) return;
+      // Add user message to conversation
+      conversations[activeConversationId].messages.push({ role: 'user', text: messageText });
+      renderMessages();
+      saveConversations();
+      // Send to backend via Socket.IO
+      socket.emit('send_message', { user_input: messageText });
+      messageInputEl.value = '';
+    }
+
+    // Button click sends message
+    sendMessageBtn.addEventListener('click', sendMessage);
+    // "Enter" key sends message
+    messageInputEl.addEventListener('keyup', (event) => {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    });
+
+    // Listen for AI response from server
+    socket.on('chat_response', (data) => {
+      if (data.error) {
+        alert(data.error);
+      } else if (data.response) {
+        conversations[activeConversationId].messages.push({ role: 'assistant', text: data.response });
+        renderMessages();
+        saveConversations();
+      }
+    });
+
+    // Voice input functionality using the Web Speech API.
+    // The microphone icon is always shown; if the API is unsupported,
+    // we simply disable the button and update its title.
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        messageInputEl.value = transcript;
+      };
+      
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error", event);
+      };
+      
+      voiceInputBtn.addEventListener('click', () => {
+        recognition.start();
+      });
+    } else {
+      voiceInputBtn.disabled = true;
+      voiceInputBtn.title = "Voice input is not supported in this browser";
+    }
+  </script>
+</body>
+</html>
