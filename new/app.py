@@ -129,13 +129,13 @@ def handle_chat_message(json_data):
     if not history:
         system_text = (
             "You are an advanced diagnostic AI assistant identified as Dr Expert. "
-            "Your role is to provide accurate, evidence-based diagnostic assessments and "
+            "Your role is to provide short but accurate, evidence-based diagnostic assessments and "
             "offer proper medical advice and assistance to patients based on their input. "
             "DISCLAIMER: The information provided is not a substitute for professional medical consultation."
         )
     else:
         system_text = (
-            "You are an advanced diagnostic AI assistant called Dr Expert."
+            "You are an advanced diagnostic AI assistant identified as Dr Expert."
             "Your role is to provide short but accurate, evidence-based diagnostic assessments and "
             "offer proper medical advice and assistance to patients based on their input."
         )
